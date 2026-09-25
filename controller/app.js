@@ -4,12 +4,35 @@ let state = {
     times: [],
     competidores: [],
     confrontos: [],
+    bannerIndex: 0,
+    bannerInterval: null
 };
+
+// Dados para o Banner Rotativo Automático
+const bannersData = [
+    {
+        titulo: "Arena GamerClass 2026",
+        subtitulo: "O epicentro da competição interclasses.",
+        cor: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)"
+    },
+    {
+        titulo: "Grandes Finais em Breve",
+        subtitulo: "Acompanhe os confrontos decisivos da temporada.",
+        cor: "linear-gradient(135deg, #831843 0%, #9f1239 50%, #be123c 100%)"
+    },
+    {
+        titulo: "Monte sua Equipe",
+        subtitulo: "Cadastre novos competidores e domine a tabela.",
+        cor: "linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%)"
+    }
+];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
     await carregarDados();
     configurarNavegacao();
+    configurarBuscaGlobal();
+    iniciarBannerRotativo();
     renderizarTudo();
 });
 
@@ -48,7 +71,105 @@ function configurarNavegacao() {
 
 function trocarView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById(`view-${viewId}`).classList.add('active');
+    const targetView = document.getElementById(`view-${viewId}`);
+    if (targetView) {
+        targetView.classList.add('active');
+    }
+}
+
+// Elemento Inteligente 1: Banner Rotativo Automático no DOM
+function iniciarBannerRotativo() {
+    const heroSection = document.querySelector('.hero');
+    if (!heroSection) return;
+
+    // Transição suave via CSS inline
+    heroSection.style.transition = 'background 0.8s ease-in-out';
+
+    // Cria os controles (indicadores) no DOM
+    const dotsContainer = document.createElement('div');
+    dotsContainer.className = 'banner-dots';
+    dotsContainer.style.cssText = 'position: absolute; bottom: 15px; right: 25px; display: flex; gap: 8px; z-index: 2;';
+
+    bannersData.forEach((_, idx) => {
+        const dot = document.createElement('span');
+        dot.style.cssText = `width: 10px; height: 10px; border-radius: 50%; background: ${idx === 0 ? '#fff' : 'rgba(255,255,255,0.4)'}; cursor: pointer; transition: all 0.3s;`;
+        dot.addEventListener('click', () => {
+            state.bannerIndex = idx;
+            atualizarBanner();
+            reiniciarTemporizadorBanner();
+        });
+        dotsContainer.appendChild(dot);
+    });
+
+    heroSection.appendChild(dotsContainer);
+
+    // Inicia a rotação automática
+    reiniciarTemporizadorBanner();
+}
+
+function atualizarBanner() {
+    const heroSection = document.querySelector('.hero');
+    const heroTitle = heroSection?.querySelector('h1');
+    const heroSub = heroSection?.querySelector('.subtitle');
+    const dots = heroSection?.querySelectorAll('.banner-dots span');
+
+    if (!heroSection || !heroTitle || !heroSub) return;
+
+    const data = bannersData[state.bannerIndex];
+    heroSection.style.background = data.cor;
+    heroTitle.textContent = data.titulo;
+    heroSub.textContent = data.subtitulo;
+
+    if (dots) {
+        dots.forEach((dot, idx) => {
+            dot.style.background = idx === state.bannerIndex ? '#fff' : 'rgba(255,255,255,0.4)';
+            dot.style.transform = idx === state.bannerIndex ? 'scale(1.2)' : 'scale(1)';
+        });
+    }
+}
+
+function reiniciarTemporizadorBanner() {
+    if (state.bannerInterval) clearInterval(state.bannerInterval);
+    state.bannerInterval = setInterval(() => {
+        state.bannerIndex = (state.bannerIndex + 1) % bannersData.length;
+        atualizarBanner();
+    }, 4000);
+}
+
+// Elemento Inteligente 2: Campo de busca/filtro interativo no DOM
+function configurarBuscaGlobal() {
+    const aside = document.querySelector('aside');
+    if (!aside) return;
+
+    const searchBox = document.createElement('div');
+    searchBox.style.cssText = 'padding: 0 0 1rem 0;';
+    searchBox.innerHTML = `
+        <input type="text" id="global-search" placeholder="🔍 Filtrar itens..." 
+               style="width: 100%; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: #fff; font-size: 0.85rem;">
+    `;
+
+    const nav = document.getElementById('sidebar-nav');
+    if (nav) {
+        aside.insertBefore(searchBox, nav);
+    }
+
+    const inputBusca = document.getElementById('global-search');
+    inputBusca.addEventListener('input', (e) => {
+        const termo = e.target.value.toLowerCase();
+        filtrarConteudoVisivel(termo);
+    });
+}
+
+function filtrarConteudoVisivel(termo) {
+    const cards = document.querySelectorAll('.view.active .card');
+    cards.forEach(card => {
+        const texto = card.textContent.toLowerCase();
+        if (texto.includes(termo)) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
 }
 
 function renderizarTudo() {
@@ -94,9 +215,9 @@ function renderizarDashboard() {
     const lista = state.confrontos.filter(c => c.status === 'scheduled').slice(0, 3);
 
     proximos.innerHTML = lista.map(c => {
-        const jogo = state.jogos.find(j => j.id == c.gameId);
-        const time1 = state.times.find(t => t.id == c.team1Id);
-        const time2 = state.times.find(t => t.id == c.team2Id);
+        const jogo = state.jogos.find(j => j.id === c.gameId);
+        const time1 = state.times.find(t => t.id === c.team1Id);
+        const time2 = state.times.find(t => t.id === c.team2Id);
         return `
             <div class="card">
                 <span class="card-tag">${jogo?.name || 'Jogo'}</span>
@@ -112,6 +233,7 @@ function renderizarDashboard() {
 
 function renderizarJogos() {
     const lista = document.getElementById('list-jogos');
+    if (!lista) return;
     lista.innerHTML = state.jogos.map(j => `
         <div class="card">
             <span class="card-tag">${j.genre}</span>
@@ -123,19 +245,21 @@ function renderizarJogos() {
 
 function renderizarTimes() {
     const lista = document.getElementById('list-times');
+    if (!lista) return;
     lista.innerHTML = state.times.map(t => `
         <div class="card" style="border-right: 4px solid ${t.color}">
             <span class="card-tag">EQUIPE</span>
             <h3>${t.name}</h3>
-            <p class="subtitle">${state.competidores.filter(c => c.teamId == t.id).length} Jogadores</p>
+            <p class="subtitle">${state.competidores.filter(c => c.teamId === t.id).length} Jogadores</p>
         </div>
     `).join('');
 }
 
 function renderizarCompetidores() {
     const lista = document.getElementById('list-competidores');
+    if (!lista) return;
     lista.innerHTML = state.competidores.map(c => {
-        const time = state.times.find(t => t.id == c.teamId);
+        const time = state.times.find(t => t.id === c.teamId);
         return `
             <div class="card">
                 <span class="card-tag">${time?.name || 'Sem Time'}</span>
@@ -148,10 +272,11 @@ function renderizarCompetidores() {
 
 function renderizarConfrontos() {
     const lista = document.getElementById('list-confrontos');
+    if (!lista) return;
     lista.innerHTML = state.confrontos.map(c => {
-        const jogo = state.jogos.find(j => j.id == c.gameId);
-        const time1 = state.times.find(t => t.id == c.team1Id);
-        const time2 = state.times.find(t => t.id == c.team2Id);
+        const jogo = state.jogos.find(j => j.id === c.gameId);
+        const time1 = state.times.find(t => t.id === c.team1Id);
+        const time2 = state.times.find(t => t.id === c.team2Id);
         const data = new Date(c.date).toLocaleString('pt-BR');
 
         return `
@@ -187,14 +312,21 @@ const modal = document.getElementById('modal-container');
 const formContent = document.getElementById('form-content');
 
 window.abrirFormulario = function (tipo) {
+    if (!modal || !formContent) return;
+
     modal.style.display = 'flex';
     setTimeout(() => {
         modal.style.opacity = '1';
         modal.style.pointerEvents = 'all';
     }, 10);
 
-    const optionsTimes = state.times.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
-    const optionsJogos = state.jogos.map(j => `<option value="${j.id}">${j.name}</option>`).join('');
+    const optionsTimes = state.times.length
+        ? state.times.map(t => `<option value="${t.id}">${t.name}</option>`).join('')
+        : '<option value="">Nenhum time cadastrado</option>';
+
+    const optionsJogos = state.jogos.length
+        ? state.jogos.map(j => `<option value="${j.id}">${j.name}</option>`).join('')
+        : '<option value="">Nenhum jogo cadastrado</option>';
 
     const formularios = {
         jogo: `
@@ -288,6 +420,7 @@ window.abrirFormulario = function (tipo) {
 };
 
 window.fecharModal = function () {
+    if (!modal) return;
     modal.style.opacity = '0';
     modal.style.pointerEvents = 'none';
     setTimeout(() => { modal.style.display = 'none'; }, 300);
@@ -313,11 +446,11 @@ window.salvarItem = function (event, colecao) {
 };
 
 window.encerrarConfrontos = function (id) {
-    const confronto = state.confrontos.find(c => c.id == id);
+    const confronto = state.confrontos.find(c => c.id === id);
     if (!confronto) return;
 
-    const time1 = state.times.find(t => t.id == confronto.team1Id);
-    const time2 = state.times.find(t => t.id == confronto.team2Id);
+    const time1 = state.times.find(t => t.id === confronto.team1Id);
+    const time2 = state.times.find(t => t.id === confronto.team2Id);
 
     const placar1 = prompt(`Placar para ${time1?.name}:`, '0');
     const placar2 = prompt(`Placar para ${time2?.name}:`, '0');
